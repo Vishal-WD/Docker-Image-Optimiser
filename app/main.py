@@ -1,17 +1,21 @@
 from contextlib import asynccontextmanager
-import base64
-import io
 import time
-from fastapi import FastAPI, Depends, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, Depends, Form, HTTPException, Body
 from fastapi.responses import HTMLResponse, JSONResponse
-from fastapi.staticfiles import StaticFiles
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from PIL import Image
+from pydantic import BaseModel
+from typing import Optional
 
 from app.config import settings
 from app.database import engine, get_db, init_db, active_db_type
-from app.models import ImageOptimization
+from app.models import DockerOptimizationRecord
+from app.optimizer import (
+    analyze_dockerfile,
+    generate_optimized_dockerfile,
+    DEFAULT_UNOPTIMIZED_DOCKERFILE,
+    STANDARD_DOCKERIGNORE
+)
 
 
 @asynccontextmanager
@@ -24,14 +28,20 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title=settings.APP_NAME,
     version=settings.APP_VERSION,
-    description="Python Docker footprint optimization demo with PostgreSQL persistence.",
+    description="Python Docker footprint optimization suite with PostgreSQL persistence.",
     lifespan=lifespan
 )
 
 
+class DockerOptimizeRequest(BaseModel):
+    dockerfile: str
+    project_name: Optional[str] = "python-app"
+    python_version: Optional[str] = "3.11"
+
+
 @app.get("/", response_class=HTMLResponse)
 def index():
-    """Serve the interactive web frontend dashboard."""
+    """Serve the interactive Docker Image Optimizer web dashboard."""
     try:
         with open("app/static/index.html", "r", encoding="utf-8") as f:
             return HTMLResponse(content=f.read())
@@ -64,9 +74,71 @@ def healthcheck(db: Session = Depends(get_db)):
     }
 
 
+@app.get("/api/default-dockerfile")
+def get_default_dockerfile():
+    """Returns the baseline unoptimized 1.5 GB Dockerfile for testing."""
+    return {
+        "dockerfile": DEFAULT_UNOPTIMIZED_DOCKERFILE,
+        "standard_dockerignore": STANDARD_DOCKERIGNORE
+    }
+
+
+@app.post("/api/optimize-dockerfile")
+def optimize_dockerfile_endpoint(
+    payload: DockerOptimizeRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Analyzes an unoptimized Dockerfile, detects bloat antipatterns,
+    generates a production-grade multi-stage Dockerfile + .dockerignore,
+    persists the audit log in PostgreSQL, and returns the comparative metrics.
+    """
+    raw_dockerfile = payload.dockerfile.strip()
+    if not raw_dockerfile:
+        raise HTTPException(status_code=400, detail="Dockerfile content cannot be empty.")
+
+    # 1. Run static analysis & size estimation
+    analysis = analyze_dockerfile(raw_dockerfile)
+
+    # 2. Generate optimized multi-stage Dockerfile
+    optimized_df = generate_optimized_dockerfile(raw_dockerfile, payload.python_version or "3.11")
+
+    # 3. Generate matching .dockerignore
+    dockerignore = STANDARD_DOCKERIGNORE
+
+    # 4. Save audit record into PostgreSQL
+    try:
+        record = DockerOptimizationRecord(
+            project_name=payload.project_name or "python-app",
+            original_dockerfile=raw_dockerfile,
+            optimized_dockerfile=optimized_df,
+            dockerignore_content=dockerignore,
+            original_size_mb=analysis["estimated_original_mb"],
+            optimized_size_mb=analysis["estimated_optimized_mb"],
+            saved_mb=analysis["saved_mb"],
+            reduction_percent=analysis["reduction_percentage"],
+            issues_found_count=analysis["issue_count"]
+        )
+        db.add(record)
+        db.commit()
+        db.refresh(record)
+        record_id = record.id
+    except Exception as e:
+        record_id = None
+
+    return {
+        "id": record_id,
+        "project_name": payload.project_name,
+        "analysis": analysis,
+        "optimized_dockerfile": optimized_df,
+        "dockerignore_content": dockerignore,
+        "persisted_in_db": record_id is not None
+    }
+
+
 @app.get("/api/docker/metrics")
 def get_docker_metrics():
-    """Returns image size benchmarks, savings percentages, and layer statistics."""
+    """Returns baseline image size benchmarks, savings percentages, and layer statistics."""
     unoptimized = settings.UNOPTIMIZED_SIZE_MB
     optimized = settings.OPTIMIZED_SIZE_MB
     saved = round(unoptimized - optimized, 1)
@@ -95,83 +167,8 @@ def get_docker_metrics():
     }
 
 
-@app.post("/api/optimize-image")
-async def optimize_media_image(
-    file: UploadFile = File(...),
-    quality: int = Form(80),
-    format: str = Form("WEBP"),
-    db: Session = Depends(get_db)
-):
-    """
-    Compresses an uploaded JPEG/PNG image using Pillow (native C-libraries),
-    stores the optimization metrics into PostgreSQL, and returns the result.
-    """
-    try:
-        contents = await file.read()
-        orig_size_bytes = len(contents)
-        if orig_size_bytes == 0:
-            raise HTTPException(status_code=400, detail="Empty file uploaded.")
-
-        # Open image with Pillow
-        img = Image.open(io.BytesIO(contents))
-
-        # Convert RGBA to RGB if saving to JPEG
-        format_upper = format.upper()
-        if format_upper == "JPEG" and img.mode in ("RGBA", "P"):
-            img = img.convert("RGB")
-
-        # Compress to output buffer
-        out_buf = io.BytesIO()
-        save_kwargs = {"quality": quality, "optimize": True}
-        if format_upper == "WEBP":
-            img.save(out_buf, format="WEBP", quality=quality, method=6)
-        elif format_upper == "JPEG":
-            img.save(out_buf, format="JPEG", **save_kwargs)
-        elif format_upper == "PNG":
-            img.save(out_buf, format="PNG", optimize=True)
-        else:
-            img.save(out_buf, format=format_upper, **save_kwargs)
-
-        opt_bytes = out_buf.getvalue()
-        opt_size_bytes = len(opt_bytes)
-
-        orig_kb = orig_size_bytes / 1024.0
-        opt_kb = opt_size_bytes / 1024.0
-        saved_kb = max(0.0, orig_kb - opt_kb)
-        reduction = max(0.0, round(((orig_kb - opt_kb) / orig_kb) * 100, 2)) if orig_kb > 0 else 0.0
-
-        # Persist log in PostgreSQL
-        record = ImageOptimization(
-            filename=file.filename or "uploaded_image",
-            original_size_kb=orig_kb,
-            optimized_size_kb=opt_kb,
-            saved_bytes_kb=saved_kb,
-            reduction_percent=reduction,
-            format=format_upper
-        )
-        db.add(record)
-        db.commit()
-        db.refresh(record)
-
-        # Return Base64 encoded result for direct browser rendering
-        encoded_img = base64.b64encode(opt_bytes).decode("utf-8")
-
-        return {
-            "id": record.id,
-            "filename": record.filename,
-            "original_size_kb": round(orig_kb, 2),
-            "optimized_size_kb": round(opt_kb, 2),
-            "saved_bytes_kb": round(saved_kb, 2),
-            "reduction_percent": reduction,
-            "format": format_upper,
-            "optimized_base64": encoded_img
-        }
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Image compression failed: {str(e)}")
-
-
 @app.get("/api/optimizations")
 def list_optimizations(db: Session = Depends(get_db)):
-    """Returns recent image optimization records stored in PostgreSQL."""
-    records = db.query(ImageOptimization).order_by(ImageOptimization.id.desc()).limit(50).all()
+    """Returns recent Docker optimization audits stored in PostgreSQL."""
+    records = db.query(DockerOptimizationRecord).order_by(DockerOptimizationRecord.id.desc()).limit(50).all()
     return [r.to_dict() for r in records]

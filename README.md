@@ -1,4 +1,4 @@
-# 🐳 Python Docker Image Footprint Optimization & Benchmark Suite
+# 🐳 Python Docker Image Footprint Optimization Suite
 
 [![Docker](https://img.shields.io/badge/Docker-20.10+-2496ED?logo=docker&logoColor=white)](https://www.docker.com/)
 [![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)](https://www.python.org/)
@@ -10,6 +10,12 @@
 
 > **Scenario:** Your Python Docker image is **1.5 GB** in size.  
 > **Task:** Migrate to a **slim base image**, introduce a strict **`.dockerignore`**, install **only needed runtime packages**, implement a **multi-stage build**, connect with **PostgreSQL**, and compare sizes using `docker images`.
+
+---
+
+## 🎬 Live Screen Recording Demo
+
+![Docker Image Optimizer Demo](docs/assets/demo_screen_recording.gif)
 
 ---
 
@@ -46,7 +52,7 @@
                                       ▼
                          OPTIMIZED CONTAINER (~142 MB)
   ┌────────────────────────────────────────────────────────────────────────┐
-  │ Stage 1 (Builder): Compiles wheels for psycopg2 & Pillow               │
+  │ Stage 1 (Builder): Compiles wheels for psycopg2 & C-extensions         │
   │ Stage 2 (Runtime): python:3.11-slim-bookworm                   135 MB │
   │ Pre-compiled production wheels installed (no build tools)         5 MB │
   │ Runtime shared libraries only (libpq5, curl)                      2 MB │
@@ -58,10 +64,10 @@
 
 1. **Slim Base Image Selection:**
    * Full `python:3.11` includes complete C development environments, manpages, and standard OS utilities, consuming over 1 GB alone.
-   * Switching to `python:3.11-slim-bookworm` provides an optimized Debian runtime containing only the essential shared libraries, immediately saving **~880 MB**.
+   * Switching to `python:3.11-slim-bookworm` provides an optimized Debian runtime containing only essential shared libraries, immediately saving **~880 MB**.
 
 2. **Multi-Stage Build Pipeline:**
-   * **Stage 1 (`builder`)**: Uses `gcc`, `libpq-dev`, `libjpeg-dev` to compile C-extensions into binary Python wheels in `/build/wheels`.
+   * **Stage 1 (`builder`)**: Uses `gcc` and `libpq-dev` to compile C-extensions into binary Python wheels in `/build/wheels`.
    * **Stage 2 (`runtime`)**: A clean `python:3.11-slim` image copies *only* the compiled wheels and installs them without compilers or headers. Compilers never touch the final image.
 
 3. **Strict Package Management & Cache Elimination:**
@@ -74,21 +80,22 @@
 
 ---
 
-## 💻 Interactive Web Dashboard
+## 💻 Web Application & Optimizer Studio
 
-When launched via Docker Compose, navigate to `http://localhost:8000` to interact with:
+When launched via Docker Compose, navigate to `http://localhost:8000`:
 
-1. **Docker Metrics Tab:**
+1. **Optimizer Studio Tab:**
+   * Paste any unoptimized Dockerfile or load the 1.5 GB scenario with 1 click.
+   * Scans for anti-patterns: base image bloat, compiler leakage, apt/pip caches, root user.
+   * Automatically generates the **Optimized Multi-Stage Dockerfile** and tailored **`.dockerignore`**.
+   * Persists every optimization audit and generated configuration into **PostgreSQL**.
+2. **Benchmarks & Layer Breakdown Tab:**
    * Side-by-side benchmark comparison cards.
    * Dynamic Chart.js visualizations showing the layer breakdown and space savings.
-   * Side-by-side interactive Dockerfile comparison with annotated differences.
-2. **Media Compressor Studio:**
-   * Live image compression using native C-extensions (`Pillow`).
-   * Real-time before-and-after visual inspection with size reduction percentages.
-   * Automatically persists compression logs into PostgreSQL.
-3. **PostgreSQL Database Explorer:**
-   * Real-time view of records stored in the `image_optimizations` table.
-   * Connection health check and query latency monitor.
+   * REA MCP static analysis and dynamic link audit report.
+3. **PostgreSQL Database Explorer Tab:**
+   * Real-time view of records stored in the `docker_optimizations` table.
+   * Live connection health check and query latency monitor.
 
 ---
 
@@ -167,9 +174,11 @@ pytest -v tests/
 
 Tests cover:
 * ✅ API healthcheck & PostgreSQL connection latency
-* ✅ Image optimization endpoint & Base64 encoding
-* ✅ Database record persistence
-* ✅ Strict static validation of `Dockerfile` (multi-stage, slim base, non-root user)
+* ✅ Dockerfile static analysis engine (bloat detection)
+* ✅ Automatic multi-stage Dockerfile generation
+* ✅ Automatic `.dockerignore` generation
+* ✅ Database record persistence in PostgreSQL
+* ✅ Strict static validation of production `Dockerfile` (multi-stage, slim base, non-root user)
 * ✅ Static verification of `.dockerignore` rules
 
 ---
@@ -183,20 +192,24 @@ image-optimizer/
 │       └── ci.yml               # GitHub Actions CI: builds both images, verifies <200MB, runs tests
 ├── app/
 │   ├── __init__.py
-│   ├── config.py                # Pydantic configuration & settings
+│   ├── config.py                # Pydantic v2 configuration & settings
 │   ├── database.py              # PostgreSQL connection & SQLAlchemy session manager
 │   ├── main.py                  # FastAPI application & REST endpoints
-│   ├── models.py                # PostgreSQL SQLAlchemy database models
+│   ├── models.py                # PostgreSQL SQLAlchemy models (docker_optimizations table)
+│   ├── optimizer.py             # Dockerfile parser, bloat detector & multi-stage generator
 │   └── static/
-│       └── index.html           # Modern interactive web dashboard (Tailwind + Chart.js)
+│       └── index.html           # Interactive Docker Image Optimizer Studio (Tailwind + Chart.js)
+├── docs/
+│   └── assets/                  # Screen recording demo GIF and screenshots
 ├── scripts/
 │   ├── compare.py               # Comparative benchmark script
 │   ├── compare.sh               # Bash comparison script
 │   ├── compare.ps1              # Windows PowerShell comparison script
-│   └── rea_analyze.py           # REA MCP artifact and dynamic link auditor
+│   ├── rea_analyze.py           # REA MCP artifact and dynamic link auditor
+│   └── record_demo.mjs          # Automated headless browser demo recorder
 ├── tests/
 │   ├── __init__.py
-│   └── test_api.py              # Comprehensive test suite
+│   └── test_api.py              # Comprehensive test suite (5 passed)
 ├── .dockerignore                # Strict build context filter
 ├── .env.example                 # Example environment variables
 ├── .gitignore                   # Git exclusion rules
@@ -214,4 +227,3 @@ image-optimizer/
 ## 🛡️ License
 
 This project is licensed under the [MIT License](LICENSE).
-

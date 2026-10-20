@@ -1,11 +1,10 @@
-import io
 import os
 import pytest
 from fastapi.testclient import TestClient
-from PIL import Image
 
 from app.main import app
 from app.database import init_db
+from app.optimizer import DEFAULT_UNOPTIMIZED_DOCKERFILE
 
 client = TestClient(app)
 
@@ -37,31 +36,44 @@ def test_docker_metrics():
     assert len(data["breakdown"]) > 0
 
 
-def test_media_image_optimization():
-    """Test image compression and PostgreSQL record insertion."""
-    # Generate a dummy RGB image in memory
-    img = Image.new("RGB", (200, 200), color=(73, 109, 137))
-    buf = io.BytesIO()
-    img.save(buf, format="JPEG")
-    buf.seek(0)
+def test_dockerfile_optimization_pipeline():
+    """Test Dockerfile static analysis, multi-stage generation, and PostgreSQL persistence."""
+    payload = {
+        "dockerfile": DEFAULT_UNOPTIMIZED_DOCKERFILE,
+        "project_name": "python-fastapi-service",
+        "python_version": "3.11"
+    }
 
-    files = {"file": ("test_sample.jpg", buf, "image/jpeg")}
-    data = {"quality": 75, "format": "WEBP"}
-
-    response = client.post("/api/optimize-image", files=files, data=data)
+    response = client.post("/api/optimize-dockerfile", json=payload)
     assert response.status_code == 200
     res_data = response.json()
-    assert res_data["filename"] == "test_sample.jpg"
-    assert res_data["format"] == "WEBP"
-    assert res_data["optimized_size_kb"] > 0
-    assert "optimized_base64" in res_data
 
-    # Verify record was stored in database
+    # 1. Verify static analysis detected bloat
+    analysis = res_data["analysis"]
+    assert analysis["estimated_original_mb"] >= 1500.0
+    assert analysis["estimated_optimized_mb"] <= 150.0
+    assert analysis["reduction_percentage"] > 90.0
+    assert analysis["issue_count"] >= 5
+
+    # 2. Verify generated multi-stage Dockerfile
+    opt_df = res_data["optimized_dockerfile"]
+    assert "AS builder" in opt_df
+    assert "AS runtime" in opt_df
+    assert "python:3.11-slim" in opt_df
+    assert "--no-cache-dir" in opt_df
+    assert "USER appuser" in opt_df
+    assert "HEALTHCHECK" in opt_df
+
+    # 3. Verify generated .dockerignore
+    assert ".git" in res_data["dockerignore_content"]
+    assert "__pycache__" in res_data["dockerignore_content"]
+
+    # 4. Verify PostgreSQL persistence
     history_res = client.get("/api/optimizations")
     assert history_res.status_code == 200
     history = history_res.json()
     assert len(history) >= 1
-    assert any(h["filename"] == "test_sample.jpg" for h in history)
+    assert any(h["project_name"] == "python-fastapi-service" for h in history)
 
 
 def test_dockerfile_best_practices():
@@ -92,4 +104,3 @@ def test_dockerignore_rules():
     assert ".git" in rules, ".git must be ignored"
     assert "__pycache__" in rules, "python cache must be ignored"
     assert "tests/" in rules or "tests" in rules, "tests must be excluded from production image"
-
