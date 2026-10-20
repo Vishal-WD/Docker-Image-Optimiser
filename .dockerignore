@@ -1,0 +1,71 @@
+# ==========================================
+# .dockerignore - Docker Build Context Filter
+# ==========================================
+
+# Version control
+.git
+.gitignore
+.gitattributes
+
+# Python byte-code and caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+
+# Development, testing, and CI configs
+tests/
+scripts/
+.github/
+Makefile
+*.ps1
+*.sh
+requirements-dev.txt
+
+# Documentation & project notes
+README.md
+LICENSE
+docs/
+*.md
+
+# Local configuration and credentials
+.env
+.env.*
+*.local
+*.log
+
+# Editor directories and files
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+.DS_Store
+Thumbs.db
+
+# Docker files
+Dockerfile*
+docker-compose*.yml

@@ -1,0 +1,77 @@
+services:
+  # ==============================================================================
+  # Primary Database: PostgreSQL 16 (Lightweight Alpine Base)
+  # ==============================================================================
+  db:
+    image: postgres:16-alpine
+    container_name: optimizer-postgres
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgrespassword
+      POSTGRES_DB: optimizer_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d optimizer_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - optimizer-network
+
+  # ==============================================================================
+  # Optimized Production Service: Multi-Stage Dockerfile (< 150 MB)
+  # ==============================================================================
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: image-optimizer:optimized
+    container_name: optimizer-web-prod
+    restart: always
+    environment:
+      DATABASE_URL: postgresql://postgres:postgrespassword@db:5432/optimizer_db
+      PORT: 8000
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "8000:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - optimizer-network
+
+  # ==============================================================================
+  # Unoptimized Baseline Service (For Comparison - ~1.5 GB)
+  # Run with: docker compose --profile unoptimized up
+  # ==============================================================================
+  web-unoptimized:
+    build:
+      context: .
+      dockerfile: Dockerfile.unoptimized
+    image: image-optimizer:unoptimized
+    container_name: optimizer-web-unoptimized
+    profiles:
+      - unoptimized
+    environment:
+      DATABASE_URL: postgresql://postgres:postgrespassword@db:5432/optimizer_db
+      PORT: 8001
+      PYTHONUNBUFFERED: "1"
+    ports:
+      - "8001:8000"
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - optimizer-network
+
+volumes:
+  postgres_data:
+    driver: local
+
+networks:
+  optimizer-network:
+    driver: bridge

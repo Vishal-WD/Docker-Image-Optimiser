@@ -1,0 +1,40 @@
+# ==============================================================================
+# UNOPTIMIZED DOCKERFILE (BASELINE - ~1.5 GB)
+# ==============================================================================
+# Scenario:
+# 1. Uses a heavy default Debian-based base image (python:3.11 is > 1.0 GB alone)
+# 2. Installs development build tools (build-essential, gcc, git, curl)
+# 3. Keeps package manager cache (/var/lib/apt/lists/*)
+# 4. Installs non-essential test/dev dependencies (pytest, black, flake8, mypy)
+# 5. Keeps pip download caches (no --no-cache-dir)
+# 6. Runs as privileged root user
+# 7. Single stage build with no artifacts stripped
+# ==============================================================================
+
+FROM python:3.11
+
+# Set environment variables
+ENV PYTHONUNBUFFERED=1
+
+# Install heavy build tools and dependencies without cleaning up apt cache
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    gcc \
+    g++ \
+    git \
+    curl \
+    libpq-dev
+
+# Set working directory
+WORKDIR /app
+
+# Copy the entire build context (including tests, docs, scripts)
+COPY . /app
+
+# Install both production and heavy dev dependencies with pip cache preserved
+RUN pip install -r requirements-dev.txt
+
+# Run as root (security anti-pattern)
+EXPOSE 8000
+
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
