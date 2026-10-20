@@ -719,21 +719,45 @@
       document.getElementById('dockerignoreOutput').innerText = generatedDockerignore;
     }
 
-    function downloadFile(filename, content) {
+    async function downloadFile(filename, content) {
       if (!content) {
         showToast("No content to download. Please run optimization first.", true);
         return;
       }
-      const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = filename;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-      showToast(`Downloaded ${filename}!`);
+      try {
+        const endpoint = filename === 'Dockerfile' ? '/api/download/dockerfile' : '/api/download/dockerignore';
+        const res = await fetch(endpoint, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            dockerfile: generatedDockerfile,
+            dockerignore: generatedDockerignore
+          })
+        });
+        if (!res.ok) throw new Error("Download failed");
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename; // Exactly 'Dockerfile' or '.dockerignore' without .txt
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast(`Downloaded ${filename} successfully!`);
+      } catch (err) {
+        // Fallback using binary octet-stream so the browser never appends .txt
+        const blob = new Blob([content], { type: 'application/octet-stream' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        showToast(`Downloaded ${filename}!`);
+      }
     }
 
     async function downloadZipBundle() {

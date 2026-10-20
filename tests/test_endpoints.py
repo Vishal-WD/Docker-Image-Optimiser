@@ -24,16 +24,35 @@ CMD ["python", "main.py"]
     data2 = r2.json()
     print("2. Upload Dockerfile OK:", data2["filename"], "Reduction:", data2["analysis"]["reduction_percentage"], "%")
 
-    # 3. Download Docker Bundle (.zip)
+    # 3. Direct Dockerfile Download (Verify no .txt extension!)
+    r_df = requests.post(
+        f"{BASE}/api/download/dockerfile",
+        json={"dockerfile": data2["optimized_dockerfile"]}
+    )
+    assert r_df.status_code == 200
+    assert 'filename="Dockerfile"' in r_df.headers.get("Content-Disposition", "")
+    assert r_df.headers.get("Content-Type") == "application/octet-stream"
+    print("3. Direct Dockerfile Download OK: Content-Disposition is", r_df.headers.get("Content-Disposition"))
+
+    # 4. Direct .dockerignore Download (Verify no .txt extension!)
+    r_di = requests.post(
+        f"{BASE}/api/download/dockerignore",
+        json={"dockerfile": data2["optimized_dockerfile"], "dockerignore": data2["dockerignore_content"]}
+    )
+    assert r_di.status_code == 200
+    assert 'filename=".dockerignore"' in r_di.headers.get("Content-Disposition", "")
+    print("4. Direct .dockerignore Download OK: Content-Disposition is", r_di.headers.get("Content-Disposition"))
+
+    # 5. Download Docker Bundle (.zip)
     r3 = requests.post(
         f"{BASE}/api/download/docker-bundle",
         json={"dockerfile": data2["optimized_dockerfile"], "dockerignore": data2["dockerignore_content"]}
     )
     assert r3.status_code == 200
     assert len(r3.content) > 100
-    print("3. Download Docker Bundle (.zip) OK:", len(r3.content), "bytes")
+    print("5. Download Docker Bundle (.zip) OK:", len(r3.content), "bytes")
 
-    # 4. Media upload & direct download
+    # 6. Media upload & direct download
     buf = io.BytesIO()
     Image.new("RGB", (100, 100), color=(10, 80, 200)).save(buf, format="JPEG")
     buf.seek(0)
@@ -44,14 +63,14 @@ CMD ["python", "main.py"]
     )
     assert r4.status_code == 200
     data4 = r4.json()
-    print("4. Media Optimize OK, download URL:", data4["download_url"])
+    print("6. Media Optimize OK, download URL:", data4["download_url"])
 
     r5 = requests.get(f"{BASE}{data4['download_url']}")
     assert r5.status_code == 200
     assert len(r5.content) > 0
-    print("5. Direct Media Download OK:", len(r5.content), "bytes")
+    print("7. Direct Media Download OK:", len(r5.content), "bytes")
 
-    print("\nALL 5 ENDPOINTS VERIFIED & WORKING PERFECTLY!")
+    print("\nALL 7 ENDPOINTS VERIFIED & WORKING PERFECTLY!")
 
 if __name__ == "__main__":
     test_all()

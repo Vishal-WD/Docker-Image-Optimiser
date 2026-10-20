@@ -334,6 +334,35 @@ def optimize_dockerfile_endpoint(
 # DOWNLOAD ENDPOINTS (DOCKERFILES & BUNDLES)
 # ==============================================================================
 
+@app.post("/api/download/dockerfile")
+def download_dockerfile_endpoint(payload: BundleDownloadRequest):
+    """Returns the Dockerfile with application/octet-stream and filename="Dockerfile" to prevent .txt suffix."""
+    return Response(
+        content=payload.dockerfile.encode("utf-8"),
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": 'attachment; filename="Dockerfile"',
+            "Content-Type": "application/octet-stream",
+            "X-Content-Type-Options": "nosniff"
+        }
+    )
+
+
+@app.post("/api/download/dockerignore")
+def download_dockerignore_endpoint(payload: BundleDownloadRequest):
+    """Returns the .dockerignore with application/octet-stream and filename=".dockerignore"."""
+    content = payload.dockerignore or STANDARD_DOCKERIGNORE
+    return Response(
+        content=content.encode("utf-8"),
+        media_type="application/octet-stream",
+        headers={
+            "Content-Disposition": 'attachment; filename=".dockerignore"',
+            "Content-Type": "application/octet-stream",
+            "X-Content-Type-Options": "nosniff"
+        }
+    )
+
+
 @app.post("/api/download/docker-bundle")
 def download_docker_bundle(payload: BundleDownloadRequest):
     """Packages the optimized Dockerfile, .dockerignore, docker-compose.yml into a downloadable .zip archive."""
