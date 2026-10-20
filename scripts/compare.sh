@@ -19,3 +19,4 @@ docker images --filter "reference=image-optimizer*" --format "table {{.Repositor
 
 echo -e "\nRunning Detailed Comparative Breakdown..."
 python3 scripts/compare.py
+

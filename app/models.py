@@ -28,3 +28,4 @@ class ImageOptimization(Base):
             "format": self.format,
             "created_at": self.created_at.isoformat() if self.created_at else None,
         }
+

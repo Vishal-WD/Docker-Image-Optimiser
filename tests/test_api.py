@@ -92,3 +92,4 @@ def test_dockerignore_rules():
     assert ".git" in rules, ".git must be ignored"
     assert "__pycache__" in rules, "python cache must be ignored"
     assert "tests/" in rules or "tests" in rules, "tests must be excluded from production image"
+

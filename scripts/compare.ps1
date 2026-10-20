@@ -21,3 +21,4 @@ docker images --filter "reference=image-optimizer*" --format "table {{.Repositor
 # Step 4: Python Benchmark Tool
 Write-Host "`nRunning Detailed Comparative Breakdown..." -ForegroundColor Cyan
 python scripts/compare.py
+

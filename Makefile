@@ -31,3 +31,4 @@ test:
 clean:
 	docker compose down -v
 	docker rmi image-optimizer:optimized image-optimizer:unoptimized || true
+

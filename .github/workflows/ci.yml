@@ -88,3 +88,4 @@ jobs:
           echo "| **Optimized** | \`python:3.11-slim\` | **${OPT_MB} MB** | **Multi-Stage** | ✅ UID 10001 |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "🎉 **Net Size Reduction: ~90.7%**" >> $GITHUB_STEP_SUMMARY
+
