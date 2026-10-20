@@ -254,3 +254,4 @@ EXPOSE {port}
 CMD {cmd}
 """
     return optimized_dockerfile
+
