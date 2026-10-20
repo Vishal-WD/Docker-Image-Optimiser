@@ -44,7 +44,6 @@ scripts/
 Makefile
 *.ps1
 *.sh
-requirements-dev.txt
 
 # Documentation & project notes
 README.md
