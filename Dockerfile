@@ -21,12 +21,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 
 WORKDIR /build
 
-# Install build dependencies needed for C-extensions (psycopg2, Pillow)
+# Install build dependencies needed for C-extensions (psycopg2-binary)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     gcc \
     libpq-dev \
-    libjpeg-dev \
-    zlib1g-dev \
     && rm -rf /var/lib/apt/lists/*
 
 # Copy only production requirements first to leverage Docker layer caching

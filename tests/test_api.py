@@ -76,6 +76,57 @@ def test_dockerfile_optimization_pipeline():
     assert any(h["project_name"] == "python-fastapi-service" for h in history)
 
 
+def test_default_dockerfile_endpoint():
+    """Verify default Dockerfile endpoint returns unoptimized baseline."""
+    response = client.get("/api/default-dockerfile")
+    assert response.status_code == 200
+    data = response.json()
+    assert "FROM python:3.11" in data["dockerfile"]
+    assert ".git" in data["standard_dockerignore"]
+
+
+def test_download_dockerignore():
+    """Verify dockerignore download returns 'dockerignore.txt' with text/plain."""
+    payload = {"dockerfile": "FROM python:3.11", "dockerignore": ".git\n__pycache__/"}
+    response = client.post("/api/download/dockerignore", json=payload)
+    assert response.status_code == 200
+    assert 'filename="dockerignore.txt"' in response.headers.get("Content-Disposition", "")
+    assert "text/plain" in response.headers.get("Content-Type")
+    assert ".git" in response.text
+
+
+def test_download_bundle():
+    """Verify Docker bundle download returns a valid zip."""
+    payload = {"dockerfile": "FROM python:3.11-slim\nCMD ['python']"}
+    response = client.post("/api/download/docker-bundle", json=payload)
+    assert response.status_code == 200
+    assert len(response.content) > 100
+
+
+def test_download_docker_image_tar():
+    """Verify Docker image tar download returns a spec-compliant tar archive with manifest, repositories, VERSION, and layer.tar."""
+    import tarfile, io, json
+    response = client.post("/api/download/docker-image-tar")
+    assert response.status_code == 200
+    assert "application/x-tar" in response.headers.get("Content-Type")
+    assert 'filename="image-optimizer-optimized.tar"' in response.headers.get("Content-Disposition")
+
+    # Verify tar content integrity
+    tf = tarfile.open(fileobj=io.BytesIO(response.content))
+    names = tf.getnames()
+    assert "repositories" in names, "Archive must contain repositories JSON"
+    assert "manifest.json" in names, "Archive must contain manifest.json"
+
+    # Verify VERSION files and layer.tar files
+    version_files = [n for n in names if n.endswith("/VERSION")]
+    layer_tars = [n for n in names if n.endswith("/layer.tar")]
+    assert len(version_files) >= 1, "Must contain at least one VERSION file"
+    assert len(layer_tars) >= 1, "Must contain at least one layer.tar filesystem archive"
+
+    for vf in version_files:
+        assert b"1.0" in tf.extractfile(vf).read()
+
+
 def test_dockerfile_best_practices():
     """Validate Dockerfile adheres to the required assignment optimizations."""
     dockerfile_path = "Dockerfile"
